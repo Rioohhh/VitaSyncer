@@ -3,8 +3,10 @@ package nl.vitasyncer.app
 import android.content.Context
 import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.*
+import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.units.Mass
 import androidx.health.connect.client.units.Percentage
 import java.time.Instant
@@ -21,6 +23,9 @@ class HealthConnectManager(private val context: Context) {
             HealthPermission.getWritePermission(LeanBodyMassRecord::class),
             HealthPermission.getWritePermission(BoneMassRecord::class),
         )
+
+        fun createPermissionContract() =
+            PermissionController.createRequestPermissionResultContract()
     }
 
     private val client: HealthConnectClient by lazy {
@@ -58,6 +63,8 @@ class HealthConnectManager(private val context: Context) {
         val logLines = mutableListOf<String>()
         val instant = Instant.ofEpochSecond(entries.first().epochSeconds)
         val zone = ZoneId.systemDefault()
+        val zoneOffset = zone.rules.getOffset(instant)
+        val metadata = Metadata()
 
         // Gewicht
         val weightEntry = entries.find { it.definitionId == store.idWeight }
@@ -66,7 +73,8 @@ class HealthConnectManager(private val context: Context) {
             records += WeightRecord(
                 weight = Mass.kilograms(it.value),
                 time = instant,
-                zoneOffset = zone.rules.getOffset(instant)
+                zoneOffset = zoneOffset,
+                metadata = metadata
             )
             logLines += "⚖️ Gewicht: ${"%.1f".format(it.value)} kg"
         }
@@ -74,34 +82,35 @@ class HealthConnectManager(private val context: Context) {
         // Vetpercentage
         val fatEntry = entries.find { it.definitionId == store.idBodyFat }
         fatEntry?.let {
-            // Health Connect verwacht een waarde van 0..100
             records += BodyFatRecord(
                 percentage = Percentage(it.value),
                 time = instant,
-                zoneOffset = zone.rules.getOffset(instant)
+                zoneOffset = zoneOffset,
+                metadata = metadata
             )
             logLines += "🫀 Vetpercentage: ${"%.1f".format(it.value)}%"
         }
 
-        // Vetvrije massa (lean body mass) = gewicht × (1 - vet%)
-        // Wordt gebruikt als proxy voor spiermassa in Health Connect
+        // Vetvrije massa = gewicht × (1 - vet%)
         if (weightKg != null && fatEntry != null) {
             val leanKg = weightKg * (1.0 - fatEntry.value / 100.0)
             records += LeanBodyMassRecord(
                 mass = Mass.kilograms(leanKg),
                 time = instant,
-                zoneOffset = zone.rules.getOffset(instant)
+                zoneOffset = zoneOffset,
+                metadata = metadata
             )
             logLines += "💪 Vetvrije massa: ${"%.1f".format(leanKg)} kg"
         }
 
-        // Botmassa (indien aanwezig)
+        // Botmassa
         val boneEntry = entries.find { it.definitionId == store.idBoneMass }
         boneEntry?.let {
             records += BoneMassRecord(
                 mass = Mass.kilograms(it.value),
                 time = instant,
-                zoneOffset = zone.rules.getOffset(instant)
+                zoneOffset = zoneOffset,
+                metadata = metadata
             )
             logLines += "🦴 Botmassa: ${"%.2f".format(it.value)} kg"
         }
