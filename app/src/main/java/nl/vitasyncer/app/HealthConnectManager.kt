@@ -60,7 +60,7 @@ class HealthConnectManager(private val context: Context) {
         val logLines = mutableListOf<String>()
         val instant = Instant.ofEpochSecond(entries.first().epochSeconds)
         val zoneOffset = ZoneId.systemDefault().rules.getOffset(instant)
-        val meta = HCMetadata()
+        val meta = HCMetadata.manualEntry()
 
         val weightEntry = entries.find { it.definitionId == store.idWeight }
         val weightKg = weightEntry?.value
